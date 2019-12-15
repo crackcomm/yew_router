@@ -1,70 +1,141 @@
-//! Wrapper around route url string, and associated history state.
-use crate::service::RouteService;
-use serde::{Deserialize, Serialize};
-use std::{fmt, ops::Deref};
-use stdweb::{unstable::TryFrom, JsSerialize, Value};
+//! Parses routes into enums or structs.
 
-/// Any state that can be stored by the History API must meet the criteria of this trait.
-pub trait RouteState: Clone + Default + JsSerialize + TryFrom<Value> + 'static {}
-impl<T> RouteState for T where T: Clone + Default + JsSerialize + TryFrom<Value> + 'static {}
-
-/// The representation of a route, segmented into different sections for easy access.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-pub struct Route<T> {
-    /// The route string
-    pub route: String,
-    /// The state stored in the history api
-    pub state: Option<T>,
-}
-
-/// Formats a path, query, and fragment into a string.
+/// Derivable routing trait that allows instances of implementors to be constructed from Routes.
 ///
 /// # Note
-/// This expects that all three already have their expected separators (?, #, etc)
-pub(crate) fn format_route_string(path: &str, query: &str, fragment: &str) -> String {
-    format!(
-        "{path}{query}{fragment}",
-        path = path,
-        query = query,
-        fragment = fragment
-    )
-}
+/// Don't try to implement this yourself, rely on the derive macro.
+///
+/// # Example
+/// ```
+/// use yew_router::Switch;
+/// #[derive(Debug, Switch, PartialEq)]
+/// enum TestEnum {
+///     #[to = "/test/route"]
+///     TestRoute,
+///     #[to = "/capture/string/{path}"]
+///     CaptureString { path: String },
+///     #[to = "/capture/number/{num}"]
+///     CaptureNumber { num: usize },
+///     #[to = "/capture/unnamed/{doot}"]
+///     CaptureUnnamed(String),
+/// }
+///
+/// assert_eq!(
+///     TestEnum::from_path("/test/route"),
+///     Some(TestEnum::TestRoute)
+/// );
+/// assert_eq!(
+///     TestEnum::from_path("/capture/string/lorem"),
+///     Some(TestEnum::CaptureString {
+///         path: "lorem".to_string()
+///     })
+/// );
+/// assert_eq!(
+///     TestEnum::from_path("/capture/number/22"),
+///     Some(TestEnum::CaptureNumber { num: 22 })
+/// );
+/// assert_eq!(
+///     TestEnum::from_path("/capture/unnamed/lorem"),
+///     Some(TestEnum::CaptureUnnamed("lorem".to_string()))
+/// );
+/// ```
+pub trait Switch: Sized {
+    /// Based on a route, possibly produce an itself.
+    fn from_path(path: &str) -> Option<Self>;
 
-impl<T> Route<T> {
-    /// Gets the current route from the route service.
-    ///
-    /// # Note
-    /// It does not get the current state.
-    /// That is only provided via events.
-    /// See [RouteService.register_callback](struct.RouteService.html#method.register_callback) to
-    /// acquire state.
-    pub fn current_route(route_service: &RouteService<T>) -> Self {
-        let route = route_service.get_route();
-        // TODO, should try to get the state using the history api once that is exposed through
-        // stdweb. https://github.com/koute/stdweb/issues/371
-        Route { route, state: None }
+    /// Parses route.
+    fn from_route(part: String) -> Option<Self> {
+        Self::from_path(&part)
     }
 }
 
-impl<T> fmt::Display for Route<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.route.fmt(f)
-    }
-}
+/// Wrapper that requires that an implementor of Switch must start with a `/`.
+///
+/// This is needed for any non-derived type provided by yew-router to be used by itself.
+///
+/// This is because route strings will almost always start with `/`, so in order to get a std type
+/// with the `rest` attribute, without a specified leading `/`, this wrapper is needed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct LeadingSlash<T>(pub T);
 
-impl<T> From<&str> for Route<T> {
-    fn from(string: &str) -> Route<T> {
-        Route {
-            route: string.to_string(),
-            state: None,
+impl<U: Switch> Switch for LeadingSlash<U> {
+    fn from_path(part: &str) -> Option<Self> {
+        if part.starts_with('/') {
+            U::from_path(&part[1..]).map(LeadingSlash)
+        } else {
+            None
         }
     }
 }
 
-impl<T> Deref for Route<T> {
-    type Target = String;
-
-    fn deref(&self) -> &Self::Target {
-        &self.route
+impl<U: Switch> Switch for Option<U> {
+    /// Option is very permissive in what is allowed.
+    fn from_path(part: &str) -> Option<Self> {
+        Some(U::from_path(part))
     }
+}
+
+/// Allows a section to match, providing a None value,
+/// if its contents are entirely missing, or starts with a '/'.
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub struct AllowMissing<T: std::fmt::Debug>(pub Option<T>);
+
+impl<U: Switch + std::fmt::Debug> Switch for AllowMissing<U> {
+    fn from_path(part: &str) -> Option<Self> {
+        let inner = U::from_path(&part);
+
+        if inner.is_some() {
+            Some(AllowMissing(inner))
+        } else if part == ""
+            || part.starts_with('/')
+            || part.starts_with('?')
+            || part.starts_with('&')
+            || part.starts_with('#')
+        {
+            Some(AllowMissing(None))
+        } else {
+            None
+        }
+    }
+}
+
+macro_rules! impl_switch_for_from_to_str {
+    ($($SelfT: ty),*) => {
+        $(
+        impl Switch for $SelfT {
+            fn from_path(part: &str) -> Option<Self> {
+                ::std::str::FromStr::from_str(&part).ok()
+            }
+        }
+        )*
+    };
+}
+
+impl_switch_for_from_to_str! {
+    String,
+    bool,
+    f64,
+    f32,
+    usize,
+    u128,
+    u64,
+    u32,
+    u16,
+    u8,
+    isize,
+    i128,
+    i64,
+    i32,
+    i16,
+    i8,
+    std::num::NonZeroU128,
+    std::num::NonZeroU64,
+    std::num::NonZeroU32,
+    std::num::NonZeroU16,
+    std::num::NonZeroU8,
+    std::num::NonZeroI128,
+    std::num::NonZeroI64,
+    std::num::NonZeroI32,
+    std::num::NonZeroI16,
+    std::num::NonZeroI8
 }

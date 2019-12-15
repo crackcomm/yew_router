@@ -8,43 +8,21 @@ readme = "README.md"
 keywords = ["web", "yew", "router"]
 categories = ["gui", "web-programming"]
 description = "A router implementation for the Yew framework"
-repository = "https://github.com/yewstack/yew_router"
-
-
-[features]
-default = ["core", "unit_alias"]
-
-core = ["router", "components"]
-unit_alias = []
-
-router = ["agent"]
-components = ["agent" ]
-agent = []
+repository = "https://github.com/crackcomm/yew_router"
 
 
 [dependencies]
-log = "0.4.8"
-serde = "1.0.103"
-serde_derive = "1.0.103"
-#yew = "0.10.0"
-yew = {git = "https://github.com/yewstack/yew", branch = "master"}
-stdweb = "0.4.20"
+log = "^0.4"
+serde = "^1.0"
+serde_derive = "^1.0"
+
+nom = "5.0.1"
 
 yew-router-route-parser = {path = "crates/yew_router_route_parser", version = "0.8.0"}
 yew-router-macro = {path = "crates/yew_router_macro", version = "0.8.0"}
-nom = "5.0.1"
-uuid = "0.8.1"
-
-
 
 [workspace]
 members = [
     "crates/yew_router_route_parser",
     "crates/yew_router_macro",
-    "examples/router_component",
-    "examples/guide",
-    "examples/switch",
-    "examples/minimal",
-    "examples/servers/warp",
-    "tests/macro_test"
 ]

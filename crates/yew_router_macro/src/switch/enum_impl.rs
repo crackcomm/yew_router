@@ -1,10 +1,13 @@
-use crate::switch::{build_serializer_for_enum, SwitchItem, impl_line};
+use crate::switch::{impl_line, SwitchItem};
 use proc_macro::TokenStream;
-use proc_macro2::Span;
 use quote::quote;
-use syn::{export::TokenStream2, Field, Fields, Ident, Type, Generics};
+use syn::{export::TokenStream2, Field, Fields, Generics, Ident, Type};
 
-pub fn generate_enum_impl(enum_ident: Ident, switch_variants: Vec<SwitchItem>, generics: Generics) -> TokenStream {
+pub fn generate_enum_impl(
+    enum_ident: Ident,
+    switch_variants: Vec<SwitchItem>,
+    generics: Generics,
+) -> TokenStream {
     let variant_matchers = switch_variants.iter().map(|sv| {
         let SwitchItem {
             matcher,
@@ -20,25 +23,15 @@ pub fn generate_enum_impl(enum_ident: Ident, switch_variants: Vec<SwitchItem>, g
         }
     });
 
-    let match_item = Ident::new("self", Span::call_site());
-    let serializer = build_serializer_for_enum(&switch_variants, &enum_ident, &match_item);
-
-
     let impl_line = impl_line(&enum_ident, &generics);
 
     let token_stream = quote! {
         #impl_line
         {
-            fn from_route_part<__T: ::yew_router::route::RouteState>(route: ::yew_router::route::Route<__T>) -> (::std::option::Option<Self>, ::std::option::Option<__T>) {
-                let mut state = route.state;
-                let route_string = route.route;
+            fn from_path(route: &str) -> ::std::option::Option<Self> {
                 #(#variant_matchers)*
 
-                return (::std::option::Option::None, state)
-            }
-
-            fn build_route_section<__T>(self, mut buf: &mut ::std::string::String) -> ::std::option::Option<__T> {
-                #serializer
+                return ::std::option::Option::None
             }
         }
     };
@@ -66,28 +59,17 @@ fn build_variant_from_captures(
                 .map(|(field_name, key, field_ty): (&Ident, String, &Type)| {
                     quote! {
                         #field_name: {
-                            let (v, s) = match captures.remove(#key) {
+                            let v = match captures.remove(#key) {
                                 ::std::option::Option::Some(value) => {
-                                    <#field_ty as ::yew_router::Switch>::from_route_part(
-                                        ::yew_router::route::Route {
-                                            route: value,
-                                            state,
-                                        }
-                                    )
+                                    <#field_ty as ::yew_router::Switch>::from_route(value)
                                 }
-                                ::std::option::Option::None => {
-                                    (
-                                        <#field_ty as ::yew_router::Switch>::key_not_available(),
-                                        state,
-                                    )
-                                }
+                                ::std::option::Option::None => ::std::option::Option::None,
                             };
                             match v {
                                 ::std::option::Option::Some(val) => {
-                                    state = s; // Set state for the next var.
                                     val
                                 },
-                                ::std::option::Option::None => return (None, s) // Failed
+                                ::std::option::Option::None => return None // Failed
                             }
                         }
                     }
@@ -95,25 +77,12 @@ fn build_variant_from_captures(
                 .collect();
 
             quote! {
-                let mut state = if let ::std::option::Option::Some(mut captures) = matcher.capture_route_into_map(&route_string).ok().map(|x| x.1) {
-                    let create_item = || {
-                         (
-                            ::std::option::Option::Some(
-                                #enum_ident::#variant_ident {
-                                    #(#fields),*
-                                }
-                            ),
-                            state
-                        )
-                    };
-                    let (val, state) = create_item();
-
-                    if val.is_some() {
-                        return (val, state);
-                    }
-                    state
-                } else {
-                    state
+                if let ::std::option::Option::Some(mut captures) = matcher.capture_route_into_map(route).ok().map(|x| x.1) {
+                    return ::std::option::Option::Some(
+                        #enum_ident::#variant_ident {
+                            #(#fields),*
+                        }
+                    );
                 };
             }
         }
@@ -122,62 +91,35 @@ fn build_variant_from_captures(
                 let field_ty = &f.ty;
                 quote! {
                     {
-                        let (v, s) = match drain.next() {
+                        let v = match drain.next() {
                             ::std::option::Option::Some(value) => {
-                                <#field_ty as ::yew_router::Switch>::from_route_part(
-                                    ::yew_router::route::Route {
-                                        route: value,
-                                        state,
-                                    }
-                                )
+                                <#field_ty as ::yew_router::Switch>::from_route(value)
                             },
-                            ::std::option::Option::None => {
-                                (
-                                    <#field_ty as ::yew_router::Switch>::key_not_available(),
-                                    state,
-                                )
-                            }
+                            ::std::option::Option::None => ::std::option::Option::None,
                         };
                         match v {
-                            ::std::option::Option::Some(val) => {
-                                state = s; // Set state for the next var.
-                                val
-                            },
-                            ::std::option::Option::None => return (None, s) // Failed
+                            ::std::option::Option::Some(val) => val,
+                            ::std::option::Option::None => return None // Failed
                         }
                     }
                 }
             });
 
             quote! {
-                let mut state = if let ::std::option::Option::Some(mut captures) = matcher.capture_route_into_vec(&route_string).ok().map(|x| x.1) {
+                if let ::std::option::Option::Some(mut captures) = matcher.capture_route_into_vec(route).ok().map(|x| x.1) {
                     let mut drain = captures.drain(..);
-                    let create_item = || {
-                         (
-                            ::std::option::Option::Some(
-                                #enum_ident::#variant_ident(
-                                    #(#fields),*
-                                )
-                            ),
-                            state
+                    return ::std::option::Option::Some(
+                        #enum_ident::#variant_ident(
+                            #(#fields),*
                         )
-                    };
-                    let (val, state) = create_item();
-                    if val.is_some() {
-                        return (val, state);
-                    }
-                    state
-                } else {
-                    state
+                    );
                 };
             }
         }
         Fields::Unit => {
             quote! {
-                let mut state = if let ::std::option::Option::Some(_captures) = matcher.capture_route_into_map(&route_string).ok().map(|x| x.1) {
-                    return (::std::option::Option::Some(#enum_ident::#variant_ident), state);
-                } else {
-                    state
+                if let ::std::option::Option::Some(_captures) = matcher.capture_route_into_map(route).ok().map(|x| x.1) {
+                    return ::std::option::Option::Some(#enum_ident::#variant_ident);
                 };
             }
         }

@@ -1,12 +1,12 @@
 use crate::switch::{
-    enum_impl::generate_enum_impl,
-    shadow::{ShadowCaptureVariant, ShadowMatcherToken},
-    struct_impl::generate_struct_impl,
+    enum_impl::generate_enum_impl, shadow::ShadowMatcherToken, struct_impl::generate_struct_impl,
 };
 use proc_macro::TokenStream;
-use proc_macro2::Span;
 use quote::quote;
-use syn::{export::TokenStream2, parse_macro_input, Data, DeriveInput, Fields, Ident, Variant, Generics, GenericParam};
+use syn::{
+    export::TokenStream2, parse_macro_input, Data, DeriveInput, Fields, GenericParam, Generics,
+    Ident, Variant,
+};
 
 mod attribute;
 mod enum_impl;
@@ -14,8 +14,8 @@ mod shadow;
 mod struct_impl;
 
 use self::attribute::AttrToken;
-use yew_router_route_parser::FieldNamingScheme;
 use syn::punctuated::Punctuated;
+use yew_router_route_parser::FieldNamingScheme;
 
 /// Holds data that is required to derive Switch for a struct or a single enum variant.
 pub struct SwitchItem {
@@ -108,186 +108,6 @@ fn build_matcher_from_tokens(tokens: &[ShadowMatcherToken]) -> TokenStream2 {
     }
 }
 
-/// Enum indicating which sort of writer is needed.
-pub(crate) enum FieldType {
-    Named,
-    Unnamed { index: usize },
-    Unit,
-}
-
-/// This assumes that the variant/struct has been destructured.
-fn write_for_token(token: &ShadowMatcherToken, naming_scheme: FieldType) -> TokenStream2 {
-    match token {
-        ShadowMatcherToken::Exact(lit) => {
-            quote! {
-                write!(buf, "{}", #lit).unwrap();
-            }
-        }
-        ShadowMatcherToken::Capture(capture) => match naming_scheme {
-            FieldType::Named | FieldType::Unit => match &capture {
-                ShadowCaptureVariant::Named(name)
-                | ShadowCaptureVariant::ManyNamed(name)
-                | ShadowCaptureVariant::NumberedNamed { name, .. } => {
-                    let name = Ident::new(&name, Span::call_site());
-                    quote! {
-                        state = state.or(#name.build_route_section(buf));
-                    }
-                }
-                ShadowCaptureVariant::Unnamed
-                | ShadowCaptureVariant::ManyUnnamed
-                | ShadowCaptureVariant::NumberedUnnamed { .. } => {
-                    panic!("Unnamed matcher sections not allowed for named field types")
-                }
-            },
-            FieldType::Unnamed { index } => {
-                let name = unnamed_field_index_item(index);
-                quote! {
-                    state = state.or(#name.build_route_section(&mut buf));
-                }
-            }
-        },
-        ShadowMatcherToken::End => quote! {},
-    }
-}
-
-/// The serializer makes up the body of `build_route_section`.
-pub fn build_serializer_for_enum(
-    switch_items: &[SwitchItem],
-    enum_ident: &Ident,
-    match_item: &Ident,
-) -> TokenStream2 {
-    let variants = switch_items.iter().map(|switch_item: &SwitchItem| {
-        let SwitchItem {
-            matcher,
-            ident,
-            fields,
-        } = switch_item;
-        match fields {
-            Fields::Named(fields_named) => {
-                let field_names = fields_named
-                    .named
-                    .iter()
-                    .filter_map(|named| named.ident.as_ref());
-                let writers = matcher
-                    .iter()
-                    .map(|token| write_for_token(token, FieldType::Named));
-                quote! {
-                    #enum_ident::#ident{#(#field_names),*} => {
-                        #(#writers)*
-                    }
-                }
-            }
-            Fields::Unnamed(fields_unnamed) => {
-                let field_names = fields_unnamed
-                    .unnamed
-                    .iter()
-                    .enumerate()
-                    .map(|(index, _)| unnamed_field_index_item(index));
-                let mut item_count = 0;
-                let writers = matcher.iter().map(|token| {
-                    if let ShadowMatcherToken::Capture(_) = &token {
-                        let ts = write_for_token(token, FieldType::Unnamed { index: item_count });
-                        item_count += 1;
-                        ts
-                    } else {
-                        // Its either a literal, or something that will panic currently
-                        write_for_token(token, FieldType::Unit)
-                    }
-                });
-                quote! {
-                    #enum_ident::#ident(#(#field_names),*) => {
-                        #(#writers)*
-                    }
-                }
-            }
-            Fields::Unit => {
-                let writers = matcher
-                    .iter()
-                    .map(|token| write_for_token(token, FieldType::Unit));
-                quote! {
-                    #enum_ident::#ident => {
-                        #(#writers)*
-                    }
-                }
-            }
-        }
-    });
-    quote! {
-        use ::std::fmt::Write as __Write;
-        let mut state: Option<__T> = None;
-        match #match_item {
-            #(#variants)*,
-        }
-        return state;
-    }
-}
-
-pub fn build_serializer_for_struct(switch_item: &SwitchItem, item: &Ident) -> TokenStream2 {
-    let SwitchItem {
-        matcher,
-        ident,
-        fields,
-    } = switch_item;
-    let destructor_and_writers = match fields {
-        Fields::Named(fields_named) => {
-            let field_names = fields_named
-                .named
-                .iter()
-                .filter_map(|named| named.ident.as_ref());
-            let writers = matcher
-                .iter()
-                .map(|token| write_for_token(token, FieldType::Named));
-            quote! {
-                let #ident{#(#field_names),*} = #item;
-                #(#writers)*
-            }
-        }
-        Fields::Unnamed(fields_unnamed) => {
-            let field_names = fields_unnamed
-                .unnamed
-                .iter()
-                .enumerate()
-                .map(|(index, _)| unnamed_field_index_item(index));
-            let mut item_count = 0;
-            let writers = matcher.iter().map(|token| {
-                if let ShadowMatcherToken::Capture(_) = &token {
-                    let ts = write_for_token(token, FieldType::Unnamed { index: item_count });
-                    item_count += 1;
-                    ts
-                } else {
-                    // Its either a literal, or something that will panic currently
-                    write_for_token(token, FieldType::Unit)
-                }
-            });
-            quote! {
-                let #ident(#(#field_names),*) = #item;
-                #(#writers)*
-            }
-        }
-        Fields::Unit => {
-            let writers = matcher
-                .iter()
-                .map(|token| write_for_token(token, FieldType::Unit));
-            quote! {
-                #(#writers)*
-            }
-        }
-    };
-    quote! {
-        use ::std::fmt::Write as _;
-        let mut state: Option<__T> = None;
-        #destructor_and_writers
-        return state;
-    }
-}
-
-/// Creates an ident used for destructuring unnamed fields.
-///
-/// There needs to be a unified way to "mangle" the unnamed fields so they can be destructured,
-fn unnamed_field_index_item(index: usize) -> Ident {
-    Ident::new(&format!("__field_{}", index), Span::call_site())
-}
-
 /// Creates the "impl <X,Y,Z> ::yew_router::Switch for TypeName<X,Y,Z> where etc.." line.
 pub fn impl_line(ident: &Ident, generics: &Generics) -> TokenStream2 {
     if generics.params.is_empty() {
@@ -308,7 +128,7 @@ pub fn impl_line(ident: &Ident, generics: &Generics) -> TokenStream2 {
             .collect::<Punctuated<_,syn::token::Comma>>();
 
         let where_clause = &generics.where_clause;
-        quote!{
+        quote! {
             impl <#params> ::yew_router::Switch for #ident <#param_idents> #where_clause
         }
     }

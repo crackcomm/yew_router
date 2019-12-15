@@ -1,8 +1,10 @@
-use crate::switch::{SwitchItem, impl_line};
-use proc_macro2::{Ident, Span};
+use crate::switch::{impl_line, SwitchItem};
+use proc_macro2::Ident;
 use quote::quote;
-use syn::{export::{TokenStream, TokenStream2}, Field, Fields, Type, Generics};
-
+use syn::{
+    export::{TokenStream, TokenStream2},
+    Field, Fields, Generics, Type,
+};
 
 
 pub fn generate_struct_impl(item: SwitchItem, generics: Generics) -> TokenStream {
@@ -14,27 +16,16 @@ pub fn generate_struct_impl(item: SwitchItem, generics: Generics) -> TokenStream
     let build_from_captures = build_struct_from_captures(&ident, &fields);
     let matcher = super::build_matcher_from_tokens(&matcher);
 
-    let match_item = Ident::new("self", Span::call_site());
-    let serializer = super::build_serializer_for_struct(&item, &match_item);
 
     let impl_line = impl_line(ident, &generics);
 
     let token_stream = quote! {
         #impl_line
         {
-            fn from_route_part<__T: ::yew_router::route::RouteState>(route: ::yew_router::route::Route<__T>) -> (::std::option::Option<Self>, ::std::option::Option<__T>) {
-
+            fn from_path(route: &str) -> ::std::option::Option<Self> {
                 #matcher
-                let mut state = route.state;
-                let route_string = route.route;
-
                 #build_from_captures
-
-                return (::std::option::Option::None, state)
-            }
-
-            fn build_route_section<__T>(self, mut buf: &mut ::std::string::String) -> ::std::option::Option<__T> {
-                #serializer
+                return ::std::option::Option::None
             }
         }
     };
@@ -57,28 +48,17 @@ fn build_struct_from_captures(ident: &Ident, fields: &Fields) -> TokenStream2 {
                 .map(|(field_name, key, field_ty): (&Ident, String, &Type)| {
                     quote! {
                         #field_name: {
-                            let (v, s) = match captures.remove(#key) {
+                            let v = match captures.remove(#key) {
                                 ::std::option::Option::Some(value) => {
-                                    <#field_ty as ::yew_router::Switch>::from_route_part(
-                                        ::yew_router::route::Route {
-                                            route: value,
-                                            state,
-                                        }
-                                    )
+                                    <#field_ty as ::yew_router::Switch>::from_route(value)
                                 }
-                                ::std::option::Option::None => {
-                                    (
-                                        <#field_ty as ::yew_router::Switch>::key_not_available(),
-                                        state,
-                                    )
-                                }
+                                ::std::option::Option::None => ::std::option::Option::None,
                             };
                             match v {
                                 ::std::option::Option::Some(val) => {
-                                    state = s; // Set state for the next var.
                                     val
                                 },
-                                ::std::option::Option::None => return (::std::option::Option::None, s) // Failed
+                                ::std::option::Option::None => return ::std::option::Option::None // Failed
                             }
                         }
                     }
@@ -86,14 +66,11 @@ fn build_struct_from_captures(ident: &Ident, fields: &Fields) -> TokenStream2 {
                 .collect();
 
             return quote! {
-                if let ::std::option::Option::Some(mut captures) = matcher.capture_route_into_map(&route_string).ok().map(|x| x.1) {
-                    return (
-                        ::std::option::Option::Some(
-                            #ident {
-                                #(#fields),*
-                            }
-                        ),
-                        state
+                if let ::std::option::Option::Some(mut captures) = matcher.capture_route_into_map(route).ok().map(|x| x.1) {
+                    return ::std::option::Option::Some(
+                        #ident {
+                            #(#fields),*
+                        }
                     );
                 };
             };
@@ -103,53 +80,37 @@ fn build_struct_from_captures(ident: &Ident, fields: &Fields) -> TokenStream2 {
                 let field_ty = &f.ty;
                 quote! {
                     {
-                        let (v, s) = match drain.next() {
+                        let v = match drain.next() {
                             ::std::option::Option::Some(value) => {
-                                <#field_ty as ::yew_router::Switch>::from_route_part(
-                                    ::yew_router::route::Route {
-                                        route: value,
-                                        state,
-                                    }
-                                )
+                                <#field_ty as ::yew_router::Switch>::from_route(value)
                             },
-                            ::std::option::Option::None => {
-                                (
-                                    <#field_ty as ::yew_router::Switch>::key_not_available(),
-                                    state,
-                                )
-                            }
+                            ::std::option::Option::None => ::std::option::Option::None,
                         };
                         match v {
                             ::std::option::Option::Some(val) => {
-                                state = s; // Set state for the next var.
                                 val
                             },
-                            ::std::option::Option::None => return (::std::option::Option::None, s) // Failed
+                            ::std::option::Option::None => return ::std::option::Option::None // Failed
                         }
                     }
                 }
             });
 
             quote! {
-                if let Some(mut captures) = matcher.capture_route_into_vec(&route_string).ok().map(|x| x.1) {
+                if let Some(mut captures) = matcher.capture_route_into_vec(route).ok().map(|x| x.1) {
                     let mut drain = captures.drain(..);
-                    return (
-                        ::std::option::Option::Some(
-                            #ident(
-                                #(#fields),*
-                            )
-                        ),
-                        state
+                    return ::std::option::Option::Some(
+                        #ident(
+                            #(#fields),*
+                        )
                     );
                 };
             }
         }
         Fields::Unit => {
             return quote! {
-                let mut state = if let ::std::option::Option::Some(_captures) = matcher.capture_route_into_map(&route_string).ok().map(|x| x.1) {
-                    return (::std::option::Option::Some(#ident), state);
-                } else {
-                    state
+                if let ::std::option::Option::Some(_captures) = matcher.capture_route_into_map(route).ok().map(|x| x.1) {
+                    return ::std::option::Option::Some(#ident);
                 };
             }
         }
