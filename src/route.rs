@@ -68,13 +68,6 @@ impl<U: Switch> Switch for LeadingSlash<U> {
     }
 }
 
-impl<U: Switch> Switch for Option<U> {
-    /// Option is very permissive in what is allowed.
-    fn from_path(part: &str) -> Option<Self> {
-        Some(U::from_path(part))
-    }
-}
-
 /// Allows a section to match, providing a None value,
 /// if its contents are entirely missing, or starts with a '/'.
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -99,43 +92,8 @@ impl<U: Switch + std::fmt::Debug> Switch for AllowMissing<U> {
     }
 }
 
-macro_rules! impl_switch_for_from_to_str {
-    ($($SelfT: ty),*) => {
-        $(
-        impl Switch for $SelfT {
-            fn from_path(part: &str) -> Option<Self> {
-                ::std::str::FromStr::from_str(&part).ok()
-            }
-        }
-        )*
-    };
-}
-
-impl_switch_for_from_to_str! {
-    String,
-    bool,
-    f64,
-    f32,
-    usize,
-    u128,
-    u64,
-    u32,
-    u16,
-    u8,
-    isize,
-    i128,
-    i64,
-    i32,
-    i16,
-    i8,
-    std::num::NonZeroU128,
-    std::num::NonZeroU64,
-    std::num::NonZeroU32,
-    std::num::NonZeroU16,
-    std::num::NonZeroU8,
-    std::num::NonZeroI128,
-    std::num::NonZeroI64,
-    std::num::NonZeroI32,
-    std::num::NonZeroI16,
-    std::num::NonZeroI8
+impl<T: std::str::FromStr> Switch for T {
+    fn from_path(s: &str) -> Option<Self> {
+        ::std::str::FromStr::from_str(s).ok()
+    }
 }
