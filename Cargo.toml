@@ -1,5 +1,5 @@
 [package]
-name = "yew-router"
+name = "yew-router-min"
 version = "0.8.0"
 authors = ["Henry Zimmerman <zimhen7@gmail.com>", "Sascha Grunert <mail@saschagrunert.de>"]
 edition = "2018"
@@ -18,8 +18,8 @@ serde_derive = "^1.0"
 
 nom = "5.0.1"
 
-yew-router-route-parser = {path = "crates/yew_router_route_parser", version = "0.8.0"}
-yew-router-macro = {path = "crates/yew_router_macro", version = "0.8.0"}
+yew-router-route-parser = { path = "crates/yew_router_route_parser", version = "0.8.0", package = "yew-router-min-route-parser" }
+yew-router-macro = { path = "crates/yew_router_macro", version = "0.8.0", package = "yew-router-min-macro" }
 
 [workspace]
 members = [

@@ -50,7 +50,7 @@ fn build_struct_from_captures(ident: &Ident, fields: &Fields) -> TokenStream2 {
                         #field_name: {
                             let v = match captures.remove(#key) {
                                 ::std::option::Option::Some(value) => {
-                                    <#field_ty as ::yew_router::Switch>::from_route(value)
+                                    <#field_ty as ::yew_router_min::Switch>::from_route(value)
                                 }
                                 ::std::option::Option::None => ::std::option::Option::None,
                             };
@@ -82,7 +82,7 @@ fn build_struct_from_captures(ident: &Ident, fields: &Fields) -> TokenStream2 {
                     {
                         let v = match drain.next() {
                             ::std::option::Option::Some(value) => {
-                                <#field_ty as ::yew_router::Switch>::from_route(value)
+                                <#field_ty as ::yew_router_min::Switch>::from_route(value)
                             },
                             ::std::option::Option::None => ::std::option::Option::None,
                         };

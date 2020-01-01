@@ -61,7 +61,7 @@ fn build_variant_from_captures(
                         #field_name: {
                             let v = match captures.remove(#key) {
                                 ::std::option::Option::Some(value) => {
-                                    <#field_ty as ::yew_router::Switch>::from_route(value)
+                                    <#field_ty as ::yew_router_min::Switch>::from_route(value)
                                 }
                                 ::std::option::Option::None => ::std::option::Option::None,
                             };
@@ -93,7 +93,7 @@ fn build_variant_from_captures(
                     {
                         let v = match drain.next() {
                             ::std::option::Option::Some(value) => {
-                                <#field_ty as ::yew_router::Switch>::from_route(value)
+                                <#field_ty as ::yew_router_min::Switch>::from_route(value)
                             },
                             ::std::option::Option::None => ::std::option::Option::None,
                         };

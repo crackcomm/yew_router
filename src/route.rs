@@ -7,7 +7,7 @@
 ///
 /// # Example
 /// ```
-/// use yew_router::Switch;
+/// use yew_router_min::Switch;
 /// #[derive(Debug, Switch, PartialEq)]
 /// enum TestEnum {
 ///     #[to = "/test/route"]

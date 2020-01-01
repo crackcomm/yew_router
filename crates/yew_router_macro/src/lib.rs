@@ -52,7 +52,7 @@ mod switch;
 /// ------
 /// # Example
 /// ```
-/// use yew_router::Switch;
+/// use yew_router_min::Switch;
 ///
 /// #[derive(Switch, Clone)]
 /// enum AppRoute {

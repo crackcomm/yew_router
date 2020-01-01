@@ -7,13 +7,13 @@ impl ToTokens for ShadowMatcherToken {
         use ShadowMatcherToken as SOT;
         let t: TokenStream2 = match self {
             SOT::Exact(s) => quote! {
-                ::yew_router::matcher::MatcherToken::Exact(#s.to_string())
+                ::yew_router_min::matcher::MatcherToken::Exact(#s.to_string())
             },
             SOT::Capture(variant) => quote! {
-                ::yew_router::matcher::MatcherToken::Capture(#variant)
+                ::yew_router_min::matcher::MatcherToken::Capture(#variant)
             },
             SOT::End => quote! {
-                ::yew_router::matcher::MatcherToken::End
+                ::yew_router_min::matcher::MatcherToken::End
             },
         };
         ts.extend(t)
@@ -50,22 +50,22 @@ impl ToTokens for ShadowCaptureVariant {
     fn to_tokens(&self, ts: &mut TokenStream2) {
         let t = match self {
             ShadowCaptureVariant::Named(name) => {
-                quote! {::yew_router::matcher::CaptureVariant::Named(#name.to_string())}
+                quote! {::yew_router_min::matcher::CaptureVariant::Named(#name.to_string())}
             }
             ShadowCaptureVariant::ManyNamed(name) => {
-                quote! {::yew_router::matcher::CaptureVariant::ManyNamed(#name.to_string())}
+                quote! {::yew_router_min::matcher::CaptureVariant::ManyNamed(#name.to_string())}
             }
             ShadowCaptureVariant::NumberedNamed { sections, name } => {
-                quote! {::yew_router::matcher::CaptureVariant::NumberedNamed{sections: #sections, name: #name.to_string()}}
+                quote! {::yew_router_min::matcher::CaptureVariant::NumberedNamed{sections: #sections, name: #name.to_string()}}
             }
             ShadowCaptureVariant::Unnamed => {
-                quote! {::yew_router::matcher::CaptureVariant::Unnamed}
+                quote! {::yew_router_min::matcher::CaptureVariant::Unnamed}
             }
             ShadowCaptureVariant::ManyUnnamed => {
-                quote! {::yew_router::matcher::CaptureVariant::ManyUnnamed}
+                quote! {::yew_router_min::matcher::CaptureVariant::ManyUnnamed}
             }
             ShadowCaptureVariant::NumberedUnnamed { sections } => {
-                quote! {::yew_router::matcher::CaptureVariant::NumberedUnnamed{sections: #sections}}
+                quote! {::yew_router_min::matcher::CaptureVariant::NumberedUnnamed{sections: #sections}}
             }
         };
         ts.extend(t)

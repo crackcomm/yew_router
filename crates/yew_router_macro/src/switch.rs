@@ -98,21 +98,21 @@ impl<T> Flatten<T> for Option<Option<T>> {
 
 fn build_matcher_from_tokens(tokens: &[ShadowMatcherToken]) -> TokenStream2 {
     quote! {
-        let settings = ::yew_router::matcher::MatcherSettings {
+        let settings = ::yew_router_min::matcher::MatcherSettings {
             case_insensitive: true,
         };
-        let matcher = ::yew_router::matcher::RouteMatcher {
+        let matcher = ::yew_router_min::matcher::RouteMatcher {
             tokens: ::std::vec![#(#tokens),*],
             settings
         };
     }
 }
 
-/// Creates the "impl <X,Y,Z> ::yew_router::Switch for TypeName<X,Y,Z> where etc.." line.
+/// Creates the "impl <X,Y,Z> ::yew_router_min::Switch for TypeName<X,Y,Z> where etc.." line.
 pub fn impl_line(ident: &Ident, generics: &Generics) -> TokenStream2 {
     if generics.params.is_empty() {
         quote! {
-            impl ::yew_router::Switch for #ident
+            impl ::yew_router_min::Switch for #ident
         }
     } else {
         let params = &generics.params;
@@ -129,7 +129,7 @@ pub fn impl_line(ident: &Ident, generics: &Generics) -> TokenStream2 {
 
         let where_clause = &generics.where_clause;
         quote! {
-            impl <#params> ::yew_router::Switch for #ident <#param_idents> #where_clause
+            impl <#params> ::yew_router_min::Switch for #ident <#param_idents> #where_clause
         }
     }
 }
